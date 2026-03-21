@@ -157,8 +157,8 @@ export default function TopNav() {
             <NavLink to="/track-order" $active={location.pathname === "/track-order"}>
               Track Order
             </NavLink>
-            <NavLink to="/" $active={false}>
-              Collections
+            <NavLink to="/products" $active={location.pathname === "/products"}>
+              Products
             </NavLink>
             <NavLink to="/" $active={false}>
               Support
