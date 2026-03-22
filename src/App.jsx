@@ -9,6 +9,7 @@ import SupportPage from "./pages/order/customer/SupportPage";
 import AdminOrderDetailsPage from "./pages/order/admin/AdminOrderDetailsPage";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
+import ProductCrudPage from "./pages/product/ProductCrudPage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/track-order" element={<TrackOrderPage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route path="/admin/orders" element={<AdminOrderDetailsPage />} />
+          <Route path="/products" element={<ProductCrudPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
         </Routes>
