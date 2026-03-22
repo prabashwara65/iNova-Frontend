@@ -3,7 +3,7 @@ import styled from "styled-components";
 import TopNav from "../../../components/navigation/TopNav";
 
 const ORDER_API_BASE_URL =
-  import.meta.env.VITE_ORDER_API_URL || "http://127.0.0.1:3002/api/orders";
+  import.meta.env.VITE_ORDER_API_URL || "https://9dzgpp9fuh.execute-api.eu-north-1.amazonaws.com/prod/api/orders/";
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-US", {
