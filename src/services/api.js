@@ -1,6 +1,7 @@
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   "https://9dzgpp9fuh.execute-api.eu-north-1.amazonaws.com/prod";
+const ORDER_API_BASE = `${API_BASE}/api/orders`;
 
 async function handleResponse(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -42,4 +43,31 @@ export const productApi = {
     }).then(handleResponse),
 };
 
-export { API_BASE };
+export const orderApi = {
+  getAll: (signal) => fetch(ORDER_API_BASE, { signal }).then(handleResponse),
+  getById: (orderId, signal) =>
+    fetch(`${ORDER_API_BASE}/${orderId}`, { signal }).then(handleResponse),
+  getByUserId: (userId, signal) =>
+    fetch(`${ORDER_API_BASE}/user/${userId}`, { signal }).then(handleResponse),
+  addToCart: (data, signal) =>
+    fetch(`${ORDER_API_BASE}/add`, {
+      method: "POST",
+      signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).then(handleResponse),
+  checkout: (data, signal) =>
+    fetch(`${ORDER_API_BASE}/checkout`, {
+      method: "POST",
+      signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).then(handleResponse),
+  cancel: (orderId, signal) =>
+    fetch(`${ORDER_API_BASE}/${orderId}/cancel`, {
+      method: "PATCH",
+      signal,
+    }).then(handleResponse),
+};
+
+export { API_BASE, ORDER_API_BASE };

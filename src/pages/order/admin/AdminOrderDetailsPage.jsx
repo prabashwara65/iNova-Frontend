@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../../components/navigation/TopNav";
+import { API_BASE, orderApi } from "../../../services/api";
 
-const ORDER_API_BASE_URL =
-  import.meta.env.VITE_ORDER_API_URL || "https://9dzgpp9fuh.execute-api.eu-north-1.amazonaws.com/prod/api/orders/";
+const REQUEST_TIMEOUT_MS = 10000;
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -25,6 +25,17 @@ const formatDate = (value) => {
     minute: "2-digit",
   }).format(new Date(value));
 };
+
+async function withTimeout(request) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await request(controller.signal);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 const Shell = styled.div`
   min-height: 100vh;
@@ -242,23 +253,23 @@ export default function AdminOrderDetailsPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(ORDER_API_BASE_URL);
-      const data = await response.json();
+      const data = await withTimeout((signal) => orderApi.getAll(signal));
+      const nextOrders = Array.isArray(data) ? data : data.orders || [];
+      setOrders(nextOrders);
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to load admin orders");
-      }
-
-      setOrders(data.orders || []);
-
-      if (!selectedOrder && data.orders?.length) {
-        setSelectedOrder(data.orders[0]);
-        setSearchOrderId(data.orders[0].orderId);
+      if (!selectedOrder && nextOrders.length) {
+        setSelectedOrder(nextOrders[0]);
+        setSearchOrderId(nextOrders[0].orderId);
       }
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Failed to load admin order view";
+
       setFeedback({
         tone: "error",
-        message: error.message || "Failed to load admin order view",
+        message: `${message} Endpoint: ${API_BASE}/api/orders`,
       });
     } finally {
       setLoading(false);
@@ -289,22 +300,27 @@ export default function AdminOrderDetailsPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${ORDER_API_BASE_URL}/${searchOrderId.trim()}`);
-      const data = await response.json();
+      const data = await withTimeout((signal) => orderApi.getById(searchOrderId.trim(), signal));
+      const nextOrder = data.order || data;
 
-      if (!response.ok) {
-        throw new Error(data.message || "Order not found");
+      if (!nextOrder?.orderId) {
+        throw new Error("Order response format is invalid");
       }
 
-      setSelectedOrder(data.order);
+      setSelectedOrder(nextOrder);
       setFeedback({
         tone: "info",
-        message: `Showing admin details for ${data.order.orderId}.`,
+        message: `Showing admin details for ${nextOrder.orderId}.`,
       });
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Failed to load order details";
+
       setFeedback({
         tone: "error",
-        message: error.message || "Failed to load order details",
+        message: `${message} Endpoint: ${API_BASE}/api/orders/${searchOrderId.trim()}`,
       });
     } finally {
       setLoading(false);

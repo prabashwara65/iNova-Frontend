@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
 import { useCart } from "../../context/CartContext";
+import { API_BASE, orderApi } from "../../services/api";
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -10,8 +11,7 @@ const formatCurrency = (value) =>
     minimumFractionDigits: 2,
   }).format(value);
 
-const ORDER_API_BASE_URL =
-  import.meta.env.VITE_ORDER_API_URL || "https://9dzgpp9fuh.execute-api.eu-north-1.amazonaws.com/prod/api/orders/";
+const REQUEST_TIMEOUT_MS = 10000;
 const TEST_USER_ID = import.meta.env.VITE_TEST_USER_ID || "test-user-001";
 const initialShippingAddress = {
   fullName: "Jhon Doe",
@@ -419,6 +419,17 @@ const NoteText = styled.p`
   color: rgba(255, 255, 255, 0.7);
 `;
 
+async function withTimeout(request) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await request(controller.signal);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export default function CartPage() {
   const {
     items,
@@ -482,43 +493,29 @@ export default function CartPage() {
 
     try {
       for (const item of selectedItems) {
-        const addResponse = await fetch(`${ORDER_API_BASE_URL}/add`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+        await withTimeout((signal) =>
+          orderApi.addToCart(
+            {
+              userId: TEST_USER_ID,
+              productId: item.id,
+              quantity: item.quantity,
+              imageUrl: item.image,
+              shippingAddress: formattedShippingAddress,
+            },
+            signal
+          )
+        );
+      }
+
+      const checkoutData = await withTimeout((signal) =>
+        orderApi.checkout(
+          {
             userId: TEST_USER_ID,
-            productId: item.id,
-            quantity: item.quantity,
-            imageUrl: item.image,
             shippingAddress: formattedShippingAddress,
-          }),
-        });
-
-        const addData = await addResponse.json();
-
-        if (!addResponse.ok) {
-          throw new Error(addData.message || "Failed to add item to cart");
-        }
-      }
-
-      const checkoutResponse = await fetch(`${ORDER_API_BASE_URL}/checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: TEST_USER_ID,
-          shippingAddress: formattedShippingAddress,
-        }),
-      });
-
-      const checkoutData = await checkoutResponse.json();
-
-      if (!checkoutResponse.ok) {
-        throw new Error(checkoutData.message || "Checkout failed");
-      }
+          },
+          signal
+        )
+      );
 
       setSubmitState({
         tone: "info",
@@ -526,9 +523,14 @@ export default function CartPage() {
       });
       clearSelectedItems();
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Order creation failed";
+
       setSubmitState({
         tone: "error",
-        message: error.message || "Order creation failed",
+        message: `${message} Endpoint: ${API_BASE}/api/orders`,
       });
     } finally {
       setIsSubmitting(false);
