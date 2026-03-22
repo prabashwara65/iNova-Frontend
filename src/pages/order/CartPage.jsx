@@ -492,8 +492,10 @@ export default function CartPage() {
     });
 
     try {
+      let pendingOrderId = "";
+
       for (const item of selectedItems) {
-        await withTimeout((signal) =>
+        const addData = await withTimeout((signal) =>
           orderApi.addToCart(
             {
               userId: TEST_USER_ID,
@@ -505,12 +507,20 @@ export default function CartPage() {
             signal
           )
         );
+
+        if (addData?.order?.orderId) {
+          pendingOrderId = addData.order.orderId;
+        }
+      }
+
+      if (!pendingOrderId) {
+        throw new Error("Pending order ID not returned from the API.");
       }
 
       const checkoutData = await withTimeout((signal) =>
         orderApi.checkout(
+          pendingOrderId,
           {
-            userId: TEST_USER_ID,
             shippingAddress: formattedShippingAddress,
           },
           signal
