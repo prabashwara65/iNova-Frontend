@@ -1,10 +1,15 @@
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import TopNav from "../components/navigation/TopNav";
+import { useCart } from "../context/CartContext";
 
 const featuredProducts = [
   {
+    id: "macbook-pro-14",
     name: "MacBook Pro 14",
+    finish: "Space Black",
+    specs: "M3 Pro | 18GB | 512GB SSD",
+    priceValue: 1999,
     price: "$1,999",
     accent: "Linear",
     tag: "Mac",
@@ -12,7 +17,11 @@ const featuredProducts = [
       "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=1400&q=80",
   },
   {
+    id: "airpods-max",
     name: "AirPods Max",
+    finish: "Silver",
+    specs: "Active Noise Cancellation",
+    priceValue: 549,
     price: "$549",
     accent: "Radial",
     tag: "Audio",
@@ -20,7 +29,11 @@ const featuredProducts = [
       "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80",
   },
   {
+    id: "apple-watch",
     name: "Apple Watch",
+    finish: "Midnight Aluminum",
+    specs: "Series GPS | 45mm",
+    priceValue: 399,
     price: "$399",
     accent: "Glass",
     tag: "Watch",
@@ -28,7 +41,11 @@ const featuredProducts = [
       "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1200&q=80",
   },
   {
+    id: "ipad-air",
     name: "iPad Air",
+    finish: "Blue",
+    specs: "M2 | 11-inch | 128GB",
+    priceValue: 599,
     price: "$599",
     accent: "Shadow",
     tag: "iPad",
@@ -471,6 +488,8 @@ const FooterRow = styled.div`
 `;
 
 export default function HomePage() {
+  const { addItem } = useCart();
+
   return (
     <Shell>
       <TopNav />
@@ -566,7 +585,21 @@ export default function HomePage() {
                 <ProductName>{product.name}</ProductName>
                 <PriceRow>
                   <Price>{product.price}</Price>
-                  <AddButton type="button">Add to cart</AddButton>
+                  <AddButton
+                    type="button"
+                    onClick={() =>
+                      addItem({
+                        id: product.id,
+                        name: product.name,
+                        finish: product.finish,
+                        specs: product.specs,
+                        price: product.priceValue,
+                        image: product.image,
+                      })
+                    }
+                  >
+                    Add to cart
+                  </AddButton>
                 </PriceRow>
               </ProductCard>
             ))}

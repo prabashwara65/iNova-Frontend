@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import styled from "styled-components";
+import { useCart } from "../../context/CartContext";
 
 function CartIcon() {
   return (
@@ -134,6 +135,7 @@ const AuthButton = styled(Link)`
 
 export default function TopNav() {
   const location = useLocation();
+  const { cartCount } = useCart();
 
   return (
     <Header>
@@ -160,7 +162,7 @@ export default function TopNav() {
             <NavLink to="/products" $active={location.pathname === "/products"}>
               Products
             </NavLink>
-            <NavLink to="/" $active={false}>
+            <NavLink to="/support" $active={location.pathname === "/support"}>
               Support
             </NavLink>
           </NavGroup>
@@ -170,7 +172,7 @@ export default function TopNav() {
               <CartIconWrap>
                 <CartIcon />
               </CartIconWrap>
-              <CartCount>2</CartCount>
+              <CartCount>{cartCount}</CartCount>
             </CartButton>
             <AuthButton to="/login">Login</AuthButton>
             <AuthButton to="/signup" $filled>

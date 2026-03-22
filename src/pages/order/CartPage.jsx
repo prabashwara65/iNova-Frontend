@@ -1,29 +1,7 @@
 import { useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
-
-const initialCartItems = [
-  {
-    id: "macbook-pro-14",
-    name: "MacBook Pro 14",
-    finish: "Space Black",
-    specs: "M3 Pro | 18GB | 512GB SSD",
-    price: 1999,
-    quantity: 1,
-    image:
-      "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=1400&q=80",
-  },
-  {
-    id: "airpods-max",
-    name: "AirPods Max",
-    finish: "Silver",
-    specs: "Active Noise Cancellation",
-    price: 549,
-    quantity: 1,
-    image:
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80",
-  },
-];
+import { useCart } from "../../context/CartContext";
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -31,6 +9,18 @@ const formatCurrency = (value) =>
     currency: "USD",
     minimumFractionDigits: 2,
   }).format(value);
+
+const ORDER_API_BASE_URL =
+  import.meta.env.VITE_ORDER_API_URL || "http://127.0.0.1:3002/api/orders";
+const TEST_USER_ID = import.meta.env.VITE_TEST_USER_ID || "test-user-001";
+const initialShippingAddress = {
+  fullName: "Jhon Doe",
+  street: "24 Flower Road",
+  city: "Colombo",
+  postalCode: "00700",
+  country: "Sri Lanka",
+  phone: "+94 77 123 4567",
+};
 
 const Shell = styled.div`
   min-height: 100vh;
@@ -188,7 +178,7 @@ const CartList = styled.div`
 
 const CartItem = styled.article`
   display: grid;
-  grid-template-columns: 112px 1fr auto;
+  grid-template-columns: auto 112px 1fr auto;
   gap: 18px;
   align-items: center;
   padding: 16px;
@@ -198,6 +188,13 @@ const CartItem = styled.article`
   @media (max-width: 760px) {
     grid-template-columns: 1fr;
   }
+`;
+
+const SelectBox = styled.input`
+  width: 18px;
+  height: 18px;
+  accent-color: #111111;
+  cursor: pointer;
 `;
 
 const ItemImage = styled.img`
@@ -233,6 +230,32 @@ const QtyPill = styled.div`
   background: white;
   font-size: 0.9rem;
   color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const QtyControl = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 999px;
+  background: white;
+`;
+
+const QtyButton = styled.button`
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: #111111;
+  color: white;
+  cursor: pointer;
+  font-size: 1rem;
+`;
+
+const QtyValue = styled.span`
+  min-width: 24px;
+  text-align: center;
+  font-weight: 700;
 `;
 
 const ItemPriceBlock = styled.div`
@@ -277,6 +300,49 @@ const DetailList = styled.div`
   margin-top: 20px;
   display: grid;
   gap: 12px;
+`;
+
+const AddressForm = styled.div`
+  margin-top: 20px;
+  display: grid;
+  gap: 14px;
+`;
+
+const AddressGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (max-width: 620px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const Field = styled.label`
+  display: grid;
+  gap: 8px;
+`;
+
+const FieldLabel = styled.span`
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const Input = styled.input`
+  width: 100%;
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: white;
+  color: ${({ theme }) => theme.colors.text};
+  font: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: rgba(17, 17, 17, 0.35);
+    box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.08);
+  }
 `;
 
 const DetailItem = styled.div`
@@ -324,6 +390,20 @@ const PayButton = styled.button`
   cursor: pointer;
   font-weight: 700;
   font-size: 1rem;
+  opacity: ${({ disabled }) => (disabled ? 0.6 : 1)};
+`;
+
+const StatusCard = styled.div`
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  line-height: 1.7;
+  background: ${({ $tone }) =>
+    $tone === "error" ? "rgba(209, 47, 47, 0.08)" : "rgba(17, 17, 17, 0.06)"};
+  color: ${({ $tone }) => ($tone === "error" ? "#8b1e1e" : "#111111")};
+  border: 1px solid
+    ${({ $tone }) =>
+      $tone === "error" ? "rgba(209, 47, 47, 0.18)" : "rgba(17, 17, 17, 0.08)"};
 `;
 
 const NoteCard = styled.div`
@@ -340,19 +420,119 @@ const NoteText = styled.p`
 `;
 
 export default function CartPage() {
-  const [items, setItems] = useState(initialCartItems);
+  const {
+    items,
+    removeItem,
+    toggleItemSelection,
+    changeQuantity,
+    clearSelectedItems,
+  } = useCart();
+  const [shippingAddress, setShippingAddress] = useState(initialShippingAddress);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitState, setSubmitState] = useState({ tone: "info", message: "" });
+
+  const selectedItems = useMemo(() => items.filter((item) => item.selected), [items]);
 
   const summary = useMemo(() => {
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const shipping = items.length > 0 ? 24 : 0;
-    const protection = items.length > 0 ? 19 : 0;
+    const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const shipping = selectedItems.length > 0 ? 24 : 0;
+    const protection = selectedItems.length > 0 ? 19 : 0;
     const total = subtotal + shipping + protection;
 
     return { subtotal, shipping, protection, total };
-  }, [items]);
+  }, [selectedItems]);
 
-  const removeItem = (id) => {
-    setItems((current) => current.filter((item) => item.id !== id));
+  const handleAddressChange = (field, value) => {
+    setShippingAddress((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const formattedShippingAddress = useMemo(() => {
+    const parts = [
+      shippingAddress.fullName,
+      shippingAddress.street,
+      [shippingAddress.city, shippingAddress.postalCode].filter(Boolean).join(" "),
+      shippingAddress.country,
+      shippingAddress.phone,
+    ];
+
+    return parts.map((part) => part.trim()).filter(Boolean).join(", ");
+  }, [shippingAddress]);
+
+  const createOrder = async () => {
+    if (selectedItems.length === 0 || isSubmitting) {
+      return;
+    }
+
+    if (!formattedShippingAddress) {
+      setSubmitState({
+        tone: "error",
+        message: "Please enter the shipping address before creating the order.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitState({
+      tone: "info",
+      message: "Creating your test order and confirming payment...",
+    });
+
+    try {
+      for (const item of selectedItems) {
+        const addResponse = await fetch(`${ORDER_API_BASE_URL}/add`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: TEST_USER_ID,
+            productId: item.id,
+            quantity: item.quantity,
+            imageUrl: item.image,
+            shippingAddress: formattedShippingAddress,
+          }),
+        });
+
+        const addData = await addResponse.json();
+
+        if (!addResponse.ok) {
+          throw new Error(addData.message || "Failed to add item to cart");
+        }
+      }
+
+      const checkoutResponse = await fetch(`${ORDER_API_BASE_URL}/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: TEST_USER_ID,
+          shippingAddress: formattedShippingAddress,
+        }),
+      });
+
+      const checkoutData = await checkoutResponse.json();
+
+      if (!checkoutResponse.ok) {
+        throw new Error(checkoutData.message || "Checkout failed");
+      }
+
+      setSubmitState({
+        tone: "info",
+        message: `Test order created successfully. Order ID: ${checkoutData.order.orderId}`,
+      });
+      clearSelectedItems();
+    } catch (error) {
+      setSubmitState({
+        tone: "error",
+        message: error.message || "Order creation failed",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -413,6 +593,12 @@ export default function CartPage() {
               <CartList>
                 {items.map((item) => (
                   <CartItem key={item.id}>
+                    <SelectBox
+                      type="checkbox"
+                      checked={item.selected}
+                      onChange={() => toggleItemSelection(item.id)}
+                      aria-label={`Select ${item.name}`}
+                    />
                     <ItemImage src={item.image} alt={item.name} />
 
                     <div>
@@ -424,13 +610,30 @@ export default function CartPage() {
                       </ItemMeta>
 
                       <ItemControls>
-                        <QtyPill>Qty {item.quantity}</QtyPill>
+                        <QtyControl>
+                          <QtyButton
+                            type="button"
+                            onClick={() => changeQuantity(item.id, item.quantity - 1)}
+                            aria-label={`Decrease quantity for ${item.name}`}
+                          >
+                            -
+                          </QtyButton>
+                          <QtyValue>{item.quantity}</QtyValue>
+                          <QtyButton
+                            type="button"
+                            onClick={() => changeQuantity(item.id, item.quantity + 1)}
+                            aria-label={`Increase quantity for ${item.name}`}
+                          >
+                            +
+                          </QtyButton>
+                        </QtyControl>
+                        <QtyPill>{item.selected ? "Selected for checkout" : "Not selected"}</QtyPill>
                         <QtyPill>Ships in 1-2 business days</QtyPill>
                       </ItemControls>
                     </div>
 
                     <ItemPriceBlock>
-                      <ItemPrice>{formatCurrency(item.price)}</ItemPrice>
+                      <ItemPrice>{formatCurrency(item.price * item.quantity)}</ItemPrice>
                       <DeleteButton type="button" onClick={() => removeItem(item.id)}>
                         Delete Item
                       </DeleteButton>
@@ -448,23 +651,77 @@ export default function CartPage() {
 
           <SideStack>
             <Panel>
-              <PanelTitle>Cart details</PanelTitle>
+              <PanelTitle>Shipping address</PanelTitle>
+              <PanelText>
+                Update the delivery address here before sending the order to the backend.
+              </PanelText>
+
+              <AddressForm>
+                <AddressGrid>
+                  <Field>
+                    <FieldLabel>Full name</FieldLabel>
+                    <Input
+                      type="text"
+                      value={shippingAddress.fullName}
+                      onChange={(event) => handleAddressChange("fullName", event.target.value)}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Phone</FieldLabel>
+                    <Input
+                      type="text"
+                      value={shippingAddress.phone}
+                      onChange={(event) => handleAddressChange("phone", event.target.value)}
+                    />
+                  </Field>
+                </AddressGrid>
+
+                <Field>
+                  <FieldLabel>Street address</FieldLabel>
+                  <Input
+                    type="text"
+                    value={shippingAddress.street}
+                    onChange={(event) => handleAddressChange("street", event.target.value)}
+                  />
+                </Field>
+
+                <AddressGrid>
+                  <Field>
+                    <FieldLabel>City</FieldLabel>
+                    <Input
+                      type="text"
+                      value={shippingAddress.city}
+                      onChange={(event) => handleAddressChange("city", event.target.value)}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Postal code</FieldLabel>
+                    <Input
+                      type="text"
+                      value={shippingAddress.postalCode}
+                      onChange={(event) => handleAddressChange("postalCode", event.target.value)}
+                    />
+                  </Field>
+                </AddressGrid>
+
+                <Field>
+                  <FieldLabel>Country</FieldLabel>
+                  <Input
+                    type="text"
+                    value={shippingAddress.country}
+                    onChange={(event) => handleAddressChange("country", event.target.value)}
+                  />
+                </Field>
+              </AddressForm>
+
               <DetailList>
-                <DetailItem>
-                  <DetailKey>Shipping address</DetailKey>
-                  <DetailValue>24 Flower Road, Colombo 07</DetailValue>
-                </DetailItem>
                 <DetailItem>
                   <DetailKey>Delivery method</DetailKey>
                   <DetailValue>Express delivery</DetailValue>
                 </DetailItem>
                 <DetailItem>
-                  <DetailKey>Payment method</DetailKey>
-                  <DetailValue>Visa ending in 2408</DetailValue>
-                </DetailItem>
-                <DetailItem>
-                  <DetailKey>Contact</DetailKey>
-                  <DetailValue>hasara@email.com</DetailValue>
+                  <DetailKey>Address preview</DetailKey>
+                  <DetailValue>{formattedShippingAddress || "Add shipping details"}</DetailValue>
                 </DetailItem>
               </DetailList>
             </Panel>
@@ -473,7 +730,7 @@ export default function CartPage() {
               <PanelTitle>Order summary</PanelTitle>
               <DetailList>
                 <DetailItem>
-                  <DetailKey>Subtotal</DetailKey>
+                  <DetailKey>Selected items subtotal</DetailKey>
                   <DetailValue>{formatCurrency(summary.subtotal)}</DetailValue>
                 </DetailItem>
                 <DetailItem>
@@ -493,7 +750,17 @@ export default function CartPage() {
                 <span>{formatCurrency(summary.total)}</span>
               </TotalRow>
 
-              <PayButton type="button">Proceed to Payment</PayButton>
+              <PayButton
+                type="button"
+                onClick={createOrder}
+                disabled={selectedItems.length === 0 || isSubmitting}
+              >
+                {isSubmitting ? "Creating Order..." : "Proceed to Payment"}
+              </PayButton>
+
+              {submitState.message ? (
+                <StatusCard $tone={submitState.tone}>{submitState.message}</StatusCard>
+              ) : null}
             </Panel>
 
             <NoteCard>
