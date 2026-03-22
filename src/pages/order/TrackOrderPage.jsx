@@ -1,5 +1,61 @@
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
+
+const ORDER_API_BASE_URL =
+  import.meta.env.VITE_ORDER_API_URL || "http://127.0.0.1:3002/api/orders";
+const TEST_USER_ID = import.meta.env.VITE_TEST_USER_ID || "test-user-001";
+const fallbackImage =
+  "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=1400&q=80";
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(Number(value || 0));
+
+const formatDate = (value) => {
+  if (!value) {
+    return "Not available";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
+const getTimelineSteps = (status) => {
+  if (status === "CANCELLED") {
+    return [
+      {
+        title: "Order was canceled",
+        meta: "This order was cancelled before shipment because it was still pending.",
+        active: true,
+      },
+    ];
+  }
+
+  if (status === "CONFIRMED") {
+    return [
+      { title: "Packing completed", meta: "Items were packed and prepared.", active: true },
+      { title: "Shipment confirmed", meta: "The order was confirmed successfully.", active: true },
+      { title: "Out for delivery", meta: "Delivery flow is in progress.", active: true },
+      { title: "Delivered", meta: "This order is shown at the delivered stage.", active: true },
+    ];
+  }
+
+  return [
+    { title: "Packing", meta: "Pending orders are currently being packed.", active: true },
+    { title: "Shipment confirmed", meta: "This appears after confirmation.", active: false },
+    { title: "Out for delivery", meta: "Courier updates will appear here next.", active: false },
+    { title: "Delivered", meta: "Final delivery confirmation will appear here.", active: false },
+  ];
+};
 
 const Shell = styled.div`
   min-height: 100vh;
@@ -54,7 +110,7 @@ const Description = styled.p`
   color: rgba(255, 255, 255, 0.74);
 `;
 
-const SearchCard = styled.div`
+const SearchCard = styled.form`
   margin-top: 28px;
   padding: 16px;
   border-radius: 20px;
@@ -111,19 +167,6 @@ const FloatingStatus = styled.div`
   box-shadow: 0 22px 40px rgba(0, 0, 0, 0.18);
 `;
 
-const StatusLabel = styled.div`
-  font-size: 0.76rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const StatusValue = styled.div`
-  margin-top: 8px;
-  font-size: 1.1rem;
-  font-weight: 700;
-`;
-
 const Grid = styled.section`
   padding: 8px 0 72px;
   display: grid;
@@ -151,6 +194,16 @@ const PanelText = styled.p`
   margin: 10px 0 0;
   color: ${({ theme }) => theme.colors.textMuted};
   line-height: 1.75;
+`;
+
+const Message = styled.div`
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  line-height: 1.7;
+  background: ${({ $tone }) => ($tone === "error" ? "rgba(209, 47, 47, 0.08)" : "rgba(17, 17, 17, 0.06)")};
+  color: ${({ $tone }) => ($tone === "error" ? "#8b1e1e" : "#111111")};
+  border: 1px solid ${({ $tone }) => ($tone === "error" ? "rgba(209, 47, 47, 0.18)" : "rgba(17, 17, 17, 0.08)")};
 `;
 
 const SummaryGrid = styled.div`
@@ -199,8 +252,13 @@ const StepMarker = styled.div`
   height: 16px;
   margin-top: 4px;
   border-radius: 50%;
-  background: ${({ $active }) => ($active ? "#111111" : "#cfcfcf")};
-  box-shadow: ${({ $active }) => ($active ? "0 0 0 6px rgba(17,17,17,0.08)" : "none")};
+  background: ${({ $active, $cancelled }) => (!$active ? "#cfcfcf" : $cancelled ? "#b42318" : "#111111")};
+  box-shadow: ${({ $active, $cancelled }) =>
+    $active
+      ? $cancelled
+        ? "0 0 0 6px rgba(180, 35, 24, 0.12)"
+        : "0 0 0 6px rgba(17,17,17,0.08)"
+      : "none"};
 `;
 
 const StepTitle = styled.div`
@@ -218,12 +276,17 @@ const SideStack = styled.div`
   gap: 22px;
 `;
 
+const ProductList = styled.div`
+  margin-top: 22px;
+  display: grid;
+  gap: 14px;
+`;
+
 const ProductCard = styled.div`
   display: grid;
   grid-template-columns: 104px 1fr;
   gap: 16px;
   align-items: center;
-  margin-top: 22px;
   padding: 14px;
   border-radius: 20px;
   background: ${({ theme }) => theme.colors.surfaceMuted};
@@ -274,51 +337,177 @@ const MiniKey = styled.div`
 
 const MiniValue = styled.div`
   font-weight: 600;
+  text-align: right;
 `;
 
-const HelpCard = styled.div`
-  padding: 18px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #1c1c1c 0%, #121212 100%);
+const ActionButton = styled.button`
+  width: 100%;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 16px;
+  background: ${({ $danger }) => ($danger ? "#b42318" : "#111111")};
   color: white;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-weight: 700;
+  opacity: ${({ disabled }) => (disabled ? 0.6 : 1)};
 `;
 
-const HelpText = styled.p`
-  margin: 10px 0 0;
-  line-height: 1.75;
-  color: rgba(255, 255, 255, 0.7);
+const OrderHistory = styled.div`
+  margin-top: 20px;
+  display: grid;
+  gap: 12px;
+`;
+
+const OrderRow = styled.button`
+  border: 0;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: ${({ $active, theme }) => ($active ? theme.colors.dark : theme.colors.surfaceMuted)};
+  color: ${({ $active }) => ($active ? "white" : "inherit")};
+  cursor: pointer;
+`;
+
+const OrderRowMeta = styled.div`
+  margin-top: 8px;
+  line-height: 1.6;
+  color: ${({ $active, theme }) => ($active ? "rgba(255,255,255,0.72)" : theme.colors.textMuted)};
 `;
 
 export default function TrackOrderPage() {
+  const [searchOrderId, setSearchOrderId] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [loadingOrder, setLoadingOrder] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [feedback, setFeedback] = useState({ tone: "info", message: "" });
+
+  const loadUserOrders = async () => {
+    setLoadingOrders(true);
+
+    try {
+      const response = await fetch(`${ORDER_API_BASE_URL}/user/${TEST_USER_ID}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to load orders");
+      }
+
+      setOrders(data.orders || []);
+
+      if (!selectedOrder && data.orders?.length) {
+        setSelectedOrder(data.orders[0]);
+        setSearchOrderId(data.orders[0].orderId);
+      }
+    } catch (error) {
+      setFeedback({ tone: "error", message: error.message || "Failed to load order history" });
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUserOrders();
+  }, []);
+
+  const handleTrackOrder = async (event) => {
+    event.preventDefault();
+
+    if (!searchOrderId.trim()) {
+      setFeedback({ tone: "error", message: "Please enter an order ID to track." });
+      return;
+    }
+
+    setLoadingOrder(true);
+    setFeedback({ tone: "info", message: "" });
+
+    try {
+      const response = await fetch(`${ORDER_API_BASE_URL}/${searchOrderId.trim()}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Order not found");
+      }
+
+      setSelectedOrder(data.order);
+      setSearchOrderId(data.order.orderId);
+      setFeedback({ tone: "info", message: `Showing tracking details for ${data.order.orderId}.` });
+    } catch (error) {
+      setSelectedOrder(null);
+      setFeedback({ tone: "error", message: error.message || "Failed to track order" });
+    } finally {
+      setLoadingOrder(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!selectedOrder || selectedOrder.status !== "PENDING" || canceling) {
+      return;
+    }
+
+    setCanceling(true);
+
+    try {
+      const response = await fetch(`${ORDER_API_BASE_URL}/${selectedOrder.orderId}/cancel`, {
+        method: "PATCH",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to cancel order");
+      }
+
+      setSelectedOrder(data.order);
+      setOrders((current) =>
+        current.map((order) => (order.orderId === data.order.orderId ? data.order : order))
+      );
+      setFeedback({ tone: "info", message: `Order ${data.order.orderId} was cancelled successfully.` });
+    } catch (error) {
+      setFeedback({ tone: "error", message: error.message || "Failed to cancel order" });
+    } finally {
+      setCanceling(false);
+    }
+  };
+
+  const timelineSteps = useMemo(() => getTimelineSteps(selectedOrder?.status || "PENDING"), [selectedOrder]);
+  const heroImage = selectedOrder?.items?.[0]?.imageUrl || fallbackImage;
+  const isCancelled = selectedOrder?.status === "CANCELLED";
+
   return (
     <Shell>
       <TopNav />
-
       <Hero>
         <Container>
           <HeroCard>
             <HeroContent>
               <Eyebrow>Track your order</Eyebrow>
-              <Title>Stay close to every step of your delivery.</Title>
+              <Title>Search by order ID and follow each update.</Title>
               <Description>
-                Follow your Apple order with a clean, visual timeline. Review the latest courier
-                updates, estimated arrival, shipping address, and support details in one place.
+                Track one order with its order ID, review the real order summary, check shipping
+                details, and cancel the order while it is still pending.
               </Description>
 
-              <SearchCard>
-                <SearchInput defaultValue="IN-2048-APL" aria-label="Order number" />
-                <SearchButton type="button">Track Order</SearchButton>
+              <SearchCard onSubmit={handleTrackOrder}>
+                <SearchInput
+                  value={searchOrderId}
+                  onChange={(event) => setSearchOrderId(event.target.value)}
+                  placeholder="Enter order ID"
+                  aria-label="Order number"
+                />
+                <SearchButton type="submit">{loadingOrder ? "Tracking..." : "Track Order"}</SearchButton>
               </SearchCard>
+
+              {feedback.message ? <Message $tone={feedback.tone}>{feedback.message}</Message> : null}
             </HeroContent>
 
             <HeroVisual>
-              <HeroImage
-                src="https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=1400&q=80"
-                alt="Packed Apple order on a minimalist desk"
-              />
+              <HeroImage src={heroImage} alt="Order preview" />
               <FloatingStatus>
-                <StatusLabel>Current status</StatusLabel>
-                <StatusValue>Out for delivery</StatusValue>
+                <div>Current status</div>
+                <strong>{selectedOrder?.status || "No order selected"}</strong>
               </FloatingStatus>
             </HeroVisual>
           </HeroCard>
@@ -330,101 +519,122 @@ export default function TrackOrderPage() {
           <Panel>
             <PanelTitle>Shipment journey</PanelTitle>
             <PanelText>
-              Your order is moving smoothly through the final delivery stages. Here is the latest
-              handoff and location information for this shipment.
+              {selectedOrder?.status === "CANCELLED"
+                ? "This order is no longer moving because it was cancelled."
+                : selectedOrder?.status === "CONFIRMED"
+                  ? "The order has moved through confirmation and is shown at the delivered stage."
+                  : "Pending orders are shown in the packing stage until confirmation happens."}
             </PanelText>
 
             <SummaryGrid>
               <SummaryItem>
                 <SummaryLabel>Order ID</SummaryLabel>
-                <SummaryValue>IN-2048-APL</SummaryValue>
+                <SummaryValue>{selectedOrder?.orderId || "Not selected"}</SummaryValue>
               </SummaryItem>
               <SummaryItem>
-                <SummaryLabel>Estimated delivery</SummaryLabel>
-                <SummaryValue>Today, 6:30 PM</SummaryValue>
+                <SummaryLabel>Status</SummaryLabel>
+                <SummaryValue>{selectedOrder?.status || "Waiting"}</SummaryValue>
               </SummaryItem>
               <SummaryItem>
-                <SummaryLabel>Courier</SummaryLabel>
-                <SummaryValue>DHL Express</SummaryValue>
+                <SummaryLabel>Created at</SummaryLabel>
+                <SummaryValue>{formatDate(selectedOrder?.createdAt)}</SummaryValue>
               </SummaryItem>
             </SummaryGrid>
 
             <Timeline>
-              <Step>
-                <StepMarker $active />
-                <div>
-                  <StepTitle>Out for delivery</StepTitle>
-                  <StepMeta>Courier left the Colombo distribution center at 1:05 PM.</StepMeta>
-                </div>
-              </Step>
-              <Step>
-                <StepMarker $active />
-                <div>
-                  <StepTitle>Arrived at local hub</StepTitle>
-                  <StepMeta>Package sorted at the final city hub at 10:20 AM.</StepMeta>
-                </div>
-              </Step>
-              <Step>
-                <StepMarker $active />
-                <div>
-                  <StepTitle>Dispatched from warehouse</StepTitle>
-                  <StepMeta>Order packed and dispatched with seal verification completed.</StepMeta>
-                </div>
-              </Step>
-              <Step>
-                <StepMarker />
-                <div>
-                  <StepTitle>Delivered</StepTitle>
-                  <StepMeta>Final confirmation will appear once the package reaches your address.</StepMeta>
-                </div>
-              </Step>
+              {timelineSteps.map((step) => (
+                <Step key={step.title}>
+                  <StepMarker $active={step.active} $cancelled={isCancelled} />
+                  <div>
+                    <StepTitle>{step.title}</StepTitle>
+                    <StepMeta>{step.meta}</StepMeta>
+                  </div>
+                </Step>
+              ))}
             </Timeline>
+
+            {selectedOrder?.status === "PENDING" ? (
+              <ActionButton type="button" $danger onClick={handleCancelOrder} disabled={canceling}>
+                {canceling ? "Cancelling..." : "Cancel Order"}
+              </ActionButton>
+            ) : null}
           </Panel>
 
           <SideStack>
             <Panel>
               <PanelTitle>Order summary</PanelTitle>
+              <PanelText>The summary below is loaded from the saved order details using the order ID.</PanelText>
 
-              <ProductCard>
-                <ProductImage
-                  src="https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=1200&q=80"
-                  alt="MacBook Pro"
-                />
-                <div>
-                  <ProductName>MacBook Pro 14</ProductName>
-                  <ProductMeta>
-                    Space Black
-                    <br />
-                    16GB unified memory
-                    <br />
-                    512GB SSD
-                  </ProductMeta>
-                </div>
-              </ProductCard>
+              <ProductList>
+                {selectedOrder?.items?.length ? (
+                  selectedOrder.items.map((item, index) => (
+                    <ProductCard key={`${item.productId}-${index}`}>
+                      <ProductImage src={item.imageUrl || fallbackImage} alt={item.productId} />
+                      <div>
+                        <ProductName>{item.productId}</ProductName>
+                        <ProductMeta>
+                          Quantity: {item.quantity}
+                          <br />
+                          Unit price: {formatCurrency(item.priceAtPurchase)}
+                          <br />
+                          Line total: {formatCurrency(item.quantity * item.priceAtPurchase)}
+                        </ProductMeta>
+                      </div>
+                    </ProductCard>
+                  ))
+                ) : (
+                  <Message $tone="info">Select an order to see its items and summary.</Message>
+                )}
+              </ProductList>
 
               <MiniList>
                 <MiniItem>
-                  <MiniKey>Shipping to</MiniKey>
-                  <MiniValue>Colombo 07, Sri Lanka</MiniValue>
+                  <MiniKey>Shipping address</MiniKey>
+                  <MiniValue>{selectedOrder?.shippingAddress || "Not available"}</MiniValue>
                 </MiniItem>
                 <MiniItem>
-                  <MiniKey>Payment</MiniKey>
-                  <MiniValue>Visa ending in 2408</MiniValue>
+                  <MiniKey>Actual total bill</MiniKey>
+                  <MiniValue>{formatCurrency(selectedOrder?.totalAmount)}</MiniValue>
                 </MiniItem>
                 <MiniItem>
-                  <MiniKey>Total</MiniKey>
-                  <MiniValue>$2,047.00</MiniValue>
+                  <MiniKey>Last updated</MiniKey>
+                  <MiniValue>{formatDate(selectedOrder?.updatedAt)}</MiniValue>
                 </MiniItem>
               </MiniList>
             </Panel>
 
-            <HelpCard>
-              <PanelTitle>Need help quickly?</PanelTitle>
-              <HelpText>
-                Contact support, update delivery instructions, or request a callback if the courier
-                misses you. Everything important is available before the order arrives.
-              </HelpText>
-            </HelpCard>
+            <Panel>
+              <PanelTitle>Your orders</PanelTitle>
+              <PanelText>All orders placed by the current user are listed here with order ID and status.</PanelText>
+
+              <OrderHistory>
+                {loadingOrders ? (
+                  <Message $tone="info">Loading your orders...</Message>
+                ) : orders.length ? (
+                  orders.map((order) => (
+                    <OrderRow
+                      key={order.orderId}
+                      type="button"
+                      $active={selectedOrder?.orderId === order.orderId}
+                      onClick={() => {
+                        setSelectedOrder(order);
+                        setSearchOrderId(order.orderId);
+                        setFeedback({ tone: "info", message: `Showing ${order.orderId}.` });
+                      }}
+                    >
+                      <strong>{order.orderId} - {order.status}</strong>
+                      <OrderRowMeta $active={selectedOrder?.orderId === order.orderId}>
+                        Total: {formatCurrency(order.totalAmount)}
+                        <br />
+                        Created: {formatDate(order.createdAt)}
+                      </OrderRowMeta>
+                    </OrderRow>
+                  ))
+                ) : (
+                  <Message $tone="info">No orders found for this user yet.</Message>
+                )}
+              </OrderHistory>
+            </Panel>
           </SideStack>
         </Grid>
       </Container>
