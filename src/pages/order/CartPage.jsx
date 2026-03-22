@@ -11,7 +11,7 @@ const formatCurrency = (value) =>
   }).format(value);
 
 const ORDER_API_BASE_URL =
-  import.meta.env.VITE_ORDER_API_URL || "http://127.0.0.1:3002/api/orders";
+  import.meta.env.VITE_ORDER_API_URL || "https://9dzgpp9fuh.execute-api.eu-north-1.amazonaws.com/prod/api/orders/";
 const TEST_USER_ID = import.meta.env.VITE_TEST_USER_ID || "test-user-001";
 const initialShippingAddress = {
   fullName: "Jhon Doe",
