@@ -29,6 +29,26 @@ const formatDate = (value) => {
   }).format(new Date(value));
 };
 
+const formatShippingAddress = (shippingAddress) => {
+  if (!shippingAddress) {
+    return "Not available";
+  }
+
+  if (typeof shippingAddress === "string") {
+    return shippingAddress;
+  }
+
+  const parts = [
+    shippingAddress.fullName,
+    shippingAddress.street,
+    [shippingAddress.city, shippingAddress.postalCode].filter(Boolean).join(" "),
+    shippingAddress.country,
+    shippingAddress.phone,
+  ];
+
+  return parts.map((part) => (part || "").trim()).filter(Boolean).join(", ") || "Not available";
+};
+
 const getTimelineSteps = (status) => {
   if (status === "CANCELLED") {
     return [
@@ -620,7 +640,7 @@ export default function TrackOrderPage() {
               <MiniList>
                 <MiniItem>
                   <MiniKey>Shipping address</MiniKey>
-                  <MiniValue>{selectedOrder?.shippingAddress || "Not available"}</MiniValue>
+                  <MiniValue>{formatShippingAddress(selectedOrder?.shippingAddress)}</MiniValue>
                 </MiniItem>
                 <MiniItem>
                   <MiniKey>Actual total bill</MiniKey>

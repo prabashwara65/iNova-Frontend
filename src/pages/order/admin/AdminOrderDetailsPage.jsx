@@ -26,6 +26,26 @@ const formatDate = (value) => {
   }).format(new Date(value));
 };
 
+const formatShippingAddress = (shippingAddress) => {
+  if (!shippingAddress) {
+    return "Not available";
+  }
+
+  if (typeof shippingAddress === "string") {
+    return shippingAddress;
+  }
+
+  const parts = [
+    shippingAddress.fullName,
+    shippingAddress.street,
+    [shippingAddress.city, shippingAddress.postalCode].filter(Boolean).join(" "),
+    shippingAddress.country,
+    shippingAddress.phone,
+  ];
+
+  return parts.map((part) => (part || "").trim()).filter(Boolean).join(", ") || "Not available";
+};
+
 async function withTimeout(request) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -423,7 +443,7 @@ export default function AdminOrderDetailsPage() {
               </DetailItem>
               <DetailItem>
                 <DetailKey>Shipping address</DetailKey>
-                <DetailValue>{selectedOrder?.shippingAddress || "Not available"}</DetailValue>
+                <DetailValue>{formatShippingAddress(selectedOrder?.shippingAddress)}</DetailValue>
               </DetailItem>
               <DetailItem>
                 <DetailKey>Created at</DetailKey>
