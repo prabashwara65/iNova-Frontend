@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
 
-const API_BASE_URL =
-  import.meta.env.VITE_PRODUCTS_API_URL ||
-  "https://inova-alb-1159271538.eu-north-1.elb.amazonaws.com/api/products/";
+const API_BASE_URL = import.meta.env.VITE_PRODUCTS_API_URL || "/api/products/";
 const REQUEST_TIMEOUT_MS = 10000;
 
 const FALLBACK_IMAGE =
