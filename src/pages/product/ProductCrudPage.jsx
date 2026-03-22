@@ -5,6 +5,7 @@ import TopNav from "../../components/navigation/TopNav";
 const API_BASE_URL =
   import.meta.env.VITE_PRODUCTS_API_URL ||
   "https://inova-alb-1159271538.eu-north-1.elb.amazonaws.com/api/products/";
+const REQUEST_TIMEOUT_MS = 10000;
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80";
@@ -447,6 +448,20 @@ async function readErrorMessage(response) {
   }
 }
 
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export default function ProductCrudPage() {
   const [products, setProducts] = useState([]);
   const [formValues, setFormValues] = useState(emptyForm);
@@ -461,7 +476,7 @@ export default function ProductCrudPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(API_BASE_URL);
+      const response = await fetchWithTimeout(API_BASE_URL);
 
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
@@ -470,9 +485,14 @@ export default function ProductCrudPage() {
       const data = await response.json();
       setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Unable to load products from the API.";
+
       setFeedback({
         type: "error",
-        message: error.message || "Unable to load products from the API.",
+        message: `${message} Endpoint: ${API_BASE_URL}`,
       });
     } finally {
       setIsLoading(false);
@@ -525,7 +545,7 @@ export default function ProductCrudPage() {
     const requestMethod = editingId ? "PUT" : "POST";
 
     try {
-      const response = await fetch(requestUrl, {
+      const response = await fetchWithTimeout(requestUrl, {
         method: requestMethod,
         headers: {
           "Content-Type": "application/json",
@@ -551,9 +571,14 @@ export default function ProductCrudPage() {
       });
       resetForm();
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Unable to save the product.";
+
       setFeedback({
         type: "error",
-        message: error.message || "Unable to save the product.",
+        message: `${message} Endpoint: ${requestUrl}`,
       });
     } finally {
       setIsSubmitting(false);
@@ -578,7 +603,8 @@ export default function ProductCrudPage() {
     setFeedback({ type: "", message: "" });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/${id}`, {
+      const requestUrl = `${API_BASE_URL}${id}`;
+      const response = await fetchWithTimeout(requestUrl, {
         method: "DELETE",
       });
 
@@ -593,9 +619,14 @@ export default function ProductCrudPage() {
         resetForm();
       }
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Unable to delete the product.";
+
       setFeedback({
         type: "error",
-        message: error.message || "Unable to delete the product.",
+        message: `${message} Endpoint: ${API_BASE_URL}${id}`,
       });
     }
   };
@@ -605,7 +636,8 @@ export default function ProductCrudPage() {
     setFeedback({ type: "", message: "" });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/${product.id}`, {
+      const requestUrl = `${API_BASE_URL}${product.id}`;
+      const response = await fetchWithTimeout(requestUrl, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -629,9 +661,14 @@ export default function ProductCrudPage() {
         setFormValues((current) => ({ ...current, status: updatedProduct.status }));
       }
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Unable to update the product status.";
+
       setFeedback({
         type: "error",
-        message: error.message || "Unable to update the product status.",
+        message: `${message} Endpoint: ${API_BASE_URL}${product.id}`,
       });
     }
   };
