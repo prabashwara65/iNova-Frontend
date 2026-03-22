@@ -4,7 +4,7 @@ import TopNav from "../../components/navigation/TopNav";
 
 const API_BASE_URL =
   import.meta.env.VITE_PRODUCTS_API_URL ||
-  "http://inova-alb-1159271538.eu-north-1.elb.amazonaws.com/api/products";
+  "https://inova-alb-1159271538.eu-north-1.elb.amazonaws.com/api/products";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80";
