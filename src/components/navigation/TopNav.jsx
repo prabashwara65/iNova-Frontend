@@ -1,4 +1,5 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 
 function CartIcon() {
@@ -14,6 +15,21 @@ function CartIcon() {
       />
       <circle cx="10" cy="18" r="1.4" fill="currentColor" />
       <circle cx="17" cy="18" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M5 19.2a7.2 7.2 0 0 1 14 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -132,8 +148,71 @@ const AuthButton = styled(Link)`
   font-weight: 600;
 `;
 
+const LogoutButton = styled.button`
+  text-decoration: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #111111;
+  border: 1px solid #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
+const ProfileButton = styled(Link)`
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+`;
+
+const ProfileIconWrap = styled.span`
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+`;
+
 export default function TopNav() {
+  const navigate = useNavigate();
   const location = useLocation();
+  const [isLoggedIn, setIsLoggedIn] = useState(Boolean(localStorage.getItem("inova_token")));
+
+  useEffect(() => {
+    setIsLoggedIn(Boolean(localStorage.getItem("inova_token")));
+  }, [location.pathname]);
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem("inova_token");
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "GET",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      // Ignore network logout failures and still clear client auth state.
+    }
+
+    localStorage.removeItem("inova_token");
+    localStorage.removeItem("inova_user");
+    setIsLoggedIn(false);
+    navigate("/");
+  };
 
   return (
     <Header>
@@ -172,10 +251,25 @@ export default function TopNav() {
               </CartIconWrap>
               <CartCount>2</CartCount>
             </CartButton>
-            <AuthButton to="/login">Login</AuthButton>
-            <AuthButton to="/signup" $filled>
-              Sign Up
-            </AuthButton>
+            {isLoggedIn ? (
+              <>
+                <ProfileButton to="/profile" aria-label="Open profile">
+                  <ProfileIconWrap>
+                    <ProfileIcon />
+                  </ProfileIconWrap>
+                </ProfileButton>
+                <LogoutButton type="button" onClick={handleLogout}>
+                  Logout
+                </LogoutButton>
+              </>
+            ) : (
+              <>
+                <AuthButton to="/login">Login</AuthButton>
+                <AuthButton to="/signup" $filled>
+                  Sign Up
+                </AuthButton>
+              </>
+            )}
           </NavGroup>
         </NavRow>
       </Container>

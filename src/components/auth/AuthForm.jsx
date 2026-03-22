@@ -105,6 +105,12 @@ const Submit = styled.button`
   &:hover {
     transform: translateY(-1px);
   }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
 `;
 
 const FooterText = styled.p`
@@ -118,6 +124,13 @@ const InlineLink = styled(Link)`
   text-decoration: none;
 `;
 
+const FormMessage = styled.p`
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  color: ${({ theme, $type }) =>
+    $type === "error" ? "#b42318" : theme.colors.success};
+`;
+
 export default function AuthForm({
   mode,
   heading,
@@ -128,6 +141,9 @@ export default function AuthForm({
   switchLinkLabel,
   switchTo,
   onSubmit,
+  submitDisabled = false,
+  errorMessage = "",
+  successMessage = "",
 }) {
   return (
     <Card>
@@ -161,7 +177,11 @@ export default function AuthForm({
           {mode === "login" ? <TextLink to="/signup">Need an account?</TextLink> : null}
         </HelperRow>
 
-        <Submit type="submit">{submitLabel}</Submit>
+        {errorMessage ? <FormMessage $type="error">{errorMessage}</FormMessage> : null}
+        {successMessage ? <FormMessage>{successMessage}</FormMessage> : null}
+        <Submit type="submit" disabled={submitDisabled}>
+          {submitLabel}
+        </Submit>
       </Form>
 
       <FooterText>

@@ -1,6 +1,9 @@
 import AuthForm from "../../components/auth/AuthForm";
 import AuthLayout from "../../components/auth/AuthLayout";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
+// Form fields configuration
 const signupFields = [
   {
     label: "First name",
@@ -52,11 +55,101 @@ const signupFields = [
 ];
 
 export default function SignupPage() {
-  const handleSubmit = (event) => {
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
+    setErrorMessage("");
+    setSuccessMessage("");
+
     const formData = new FormData(event.currentTarget);
     const payload = Object.fromEntries(formData.entries());
-    console.log("Signup form submitted:", payload);
+
+    const firstName = payload.firstName?.trim();
+    const lastName = payload.lastName?.trim();
+    const email = payload.email?.trim();
+    const phone = payload.phone?.trim();
+    const password = payload.password;
+    const confirmPassword = payload.confirmPassword;
+
+    // Basic validation
+    if (!firstName || !lastName || !email || !password || !confirmPassword) {
+      setErrorMessage("Please fill in all required fields.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const requestBody = JSON.stringify({
+        firstName,
+        lastName,
+        email,
+        phone,
+        password,
+        confirmPassword,
+      });
+
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: requestBody,
+        credentials: "include",
+      });
+
+      const rawBody = await response.text();
+      let data = null;
+
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok || data?.success === false) {
+        throw new Error(
+          data?.message ||
+            (rawBody && rawBody.trim()) ||
+            "Registration failed. Server returned an invalid response."
+        );
+      }
+
+      if (data?.token) {
+        localStorage.setItem("inova_token", data.token);
+      }
+      if (data?.user) {
+        localStorage.setItem("inova_user", JSON.stringify(data.user));
+      }
+
+      form.reset();
+      setSuccessMessage("Registration successful. You can now log in.");
+      navigate(data?.user?.role === "admin" ? "/admin" : "/");
+    } catch (error) {
+      const isNetworkFailure =
+        error instanceof TypeError &&
+        (error.message === "Failed to fetch" || error.message === "NetworkError when attempting to fetch resource.");
+
+      if (isNetworkFailure) {
+        setErrorMessage(
+          "Cannot reach User Service. Make sure backend is running on port 3003, then restart frontend dev server."
+        );
+      } else {
+        setErrorMessage(error.message || "Unable to register user right now.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,11 +163,14 @@ export default function SignupPage() {
         heading="Create account"
         intro="Fill in your details to start saving products, checking out faster, and managing your profile."
         fields={signupFields}
-        submitLabel="Sign Up"
+        submitLabel={isSubmitting ? "Signing up..." : "Sign Up"}
         switchText="Already have an account?"
         switchLinkLabel="Login instead"
         switchTo="/login"
         onSubmit={handleSubmit}
+        submitDisabled={isSubmitting}
+        errorMessage={errorMessage}
+        successMessage={successMessage}
       />
     </AuthLayout>
   );
