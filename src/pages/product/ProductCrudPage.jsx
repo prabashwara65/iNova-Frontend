@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
+import { API_BASE, productApi } from "../../services/api";
 
-const API_BASE_URL = import.meta.env.VITE_PRODUCTS_API_URL || "/api/products/";
 const REQUEST_TIMEOUT_MS = 10000;
 
 const FALLBACK_IMAGE =
@@ -437,46 +437,12 @@ const buildPayload = (values) => ({
   description: values.description.trim(),
 });
 
-async function readErrorMessage(response) {
-  try {
-    const contentType = response.headers.get("content-type") || "";
-
-    if (contentType.includes("application/json")) {
-      const data = await response.json();
-      return data.error || data.message || "Something went wrong.";
-    }
-
-    const text = await response.text();
-    return text || "Something went wrong.";
-  } catch {
-    return "Something went wrong.";
-  }
-}
-
-async function parseJsonResponse(response) {
-  const contentType = response.headers.get("content-type") || "";
-
-  if (!contentType.includes("application/json")) {
-    const text = await response.text();
-    throw new Error(
-      `Expected JSON but received ${contentType || "unknown content type"}${
-        text ? `: ${text.slice(0, 120)}` : ""
-      }`,
-    );
-  }
-
-  return response.json();
-}
-
-async function fetchWithTimeout(url, options = {}) {
+async function withTimeout(request) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
+    return await request(controller.signal);
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -496,13 +462,7 @@ export default function ProductCrudPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetchWithTimeout(API_BASE_URL);
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      const data = await parseJsonResponse(response);
+      const data = await withTimeout((signal) => productApi.getAll(signal));
       setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
     } catch (error) {
       const message =
@@ -512,7 +472,7 @@ export default function ProductCrudPage() {
 
       setFeedback({
         type: "error",
-        message: `${message} Endpoint: ${API_BASE_URL}`,
+        message: `${message} Endpoint: ${API_BASE}/api/products`,
       });
     } finally {
       setIsLoading(false);
@@ -561,23 +521,13 @@ export default function ProductCrudPage() {
     setFeedback({ type: "", message: "" });
 
     const payload = buildPayload(formValues);
-    const requestUrl = editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL;
-    const requestMethod = editingId ? "PUT" : "POST";
 
     try {
-      const response = await fetchWithTimeout(requestUrl, {
-        method: requestMethod,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      const savedProduct = normalizeProduct(await parseJsonResponse(response));
+      const savedProduct = normalizeProduct(
+        await withTimeout((signal) =>
+          editingId ? productApi.update(editingId, payload, signal) : productApi.create(payload, signal),
+        ),
+      );
 
       setProducts((current) =>
         editingId
@@ -598,7 +548,9 @@ export default function ProductCrudPage() {
 
       setFeedback({
         type: "error",
-        message: `${message} Endpoint: ${requestUrl}`,
+        message: `${message} Endpoint: ${
+          editingId ? `${API_BASE}/api/products/${editingId}` : `${API_BASE}/api/products`
+        }`,
       });
     } finally {
       setIsSubmitting(false);
@@ -623,14 +575,7 @@ export default function ProductCrudPage() {
     setFeedback({ type: "", message: "" });
 
     try {
-      const requestUrl = `${API_BASE_URL}${id}`;
-      const response = await fetchWithTimeout(requestUrl, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
+      await withTimeout((signal) => productApi.delete(id, signal));
 
       setProducts((current) => current.filter((product) => product.id !== id));
       setFeedback({ type: "success", message: "Product deleted successfully." });
@@ -646,7 +591,7 @@ export default function ProductCrudPage() {
 
       setFeedback({
         type: "error",
-        message: `${message} Endpoint: ${API_BASE_URL}${id}`,
+        message: `${message} Endpoint: ${API_BASE}/api/products/${id}`,
       });
     }
   };
@@ -656,23 +601,18 @@ export default function ProductCrudPage() {
     setFeedback({ type: "", message: "" });
 
     try {
-      const requestUrl = `${API_BASE_URL}${product.id}`;
-      const response = await fetchWithTimeout(requestUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...buildPayload(product),
-          status: nextStatus,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      const updatedProduct = normalizeProduct(await parseJsonResponse(response));
+      const updatedProduct = normalizeProduct(
+        await withTimeout((signal) =>
+          productApi.update(
+            product.id,
+            {
+              ...buildPayload(product),
+              status: nextStatus,
+            },
+            signal,
+          ),
+        ),
+      );
       setProducts((current) =>
         current.map((item) => (item.id === product.id ? updatedProduct : item)),
       );
@@ -688,7 +628,7 @@ export default function ProductCrudPage() {
 
       setFeedback({
         type: "error",
-        message: `${message} Endpoint: ${API_BASE_URL}${product.id}`,
+        message: `${message} Endpoint: ${API_BASE}/api/products/${product.id}`,
       });
     }
   };
