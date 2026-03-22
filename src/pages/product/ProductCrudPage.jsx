@@ -439,11 +439,33 @@ const buildPayload = (values) => ({
 
 async function readErrorMessage(response) {
   try {
-    const data = await response.json();
-    return data.error || data.message || "Something went wrong.";
+    const contentType = response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      return data.error || data.message || "Something went wrong.";
+    }
+
+    const text = await response.text();
+    return text || "Something went wrong.";
   } catch {
     return "Something went wrong.";
   }
+}
+
+async function parseJsonResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    throw new Error(
+      `Expected JSON but received ${contentType || "unknown content type"}${
+        text ? `: ${text.slice(0, 120)}` : ""
+      }`,
+    );
+  }
+
+  return response.json();
 }
 
 async function fetchWithTimeout(url, options = {}) {
@@ -480,7 +502,7 @@ export default function ProductCrudPage() {
         throw new Error(await readErrorMessage(response));
       }
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
       setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
     } catch (error) {
       const message =
@@ -555,7 +577,7 @@ export default function ProductCrudPage() {
         throw new Error(await readErrorMessage(response));
       }
 
-      const savedProduct = normalizeProduct(await response.json());
+      const savedProduct = normalizeProduct(await parseJsonResponse(response));
 
       setProducts((current) =>
         editingId
@@ -650,7 +672,7 @@ export default function ProductCrudPage() {
         throw new Error(await readErrorMessage(response));
       }
 
-      const updatedProduct = normalizeProduct(await response.json());
+      const updatedProduct = normalizeProduct(await parseJsonResponse(response));
       setProducts((current) =>
         current.map((item) => (item.id === product.id ? updatedProduct : item)),
       );

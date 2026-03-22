@@ -1,12 +1,11 @@
 {
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/products/:path*",
-      "destination": "/api/products/:path*"
+      "handle": "filesystem"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
