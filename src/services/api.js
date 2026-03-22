@@ -1,6 +1,6 @@
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://zc6vtxmbvi.execute-api.eu-north-1.amazonaws.com";
+  "https://inova-alb-1159271538.eu-north-1.elb.amazonaws.com/";
 
 async function handleResponse(response) {
   const contentType = response.headers.get("content-type") || "";
