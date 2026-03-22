@@ -416,7 +416,7 @@ export default function TrackOrderPage() {
 
       setFeedback({
         tone: "error",
-        message: `${message} Endpoint: ${API_BASE}/api/orders/user/${TEST_USER_ID}`,
+        message: `${message} Endpoint: ${API_BASE}/api/orders?userId=${TEST_USER_ID}`,
       });
     } finally {
       setLoadingOrders(false);
@@ -473,7 +473,13 @@ export default function TrackOrderPage() {
     setCanceling(true);
 
     try {
-      const data = await withTimeout((signal) => orderApi.cancel(selectedOrder.orderId, signal));
+      const data = await withTimeout((signal) =>
+        orderApi.update(
+          selectedOrder.orderId,
+          { action: "cancel" },
+          signal
+        )
+      );
       const nextOrder = data.order || data;
 
       setSelectedOrder(nextOrder);
@@ -489,7 +495,7 @@ export default function TrackOrderPage() {
 
       setFeedback({
         tone: "error",
-        message: `${message} Endpoint: ${API_BASE}/api/orders/${selectedOrder.orderId}/cancel`,
+        message: `${message} Endpoint: ${API_BASE}/api/orders/${selectedOrder.orderId}`,
       });
     } finally {
       setCanceling(false);
