@@ -49,26 +49,24 @@ export const orderApi = {
     fetch(`${ORDER_API_BASE}/${orderId}`, { signal }).then(handleResponse),
   getByUserId: (userId, signal) =>
     fetch(`${ORDER_API_BASE}?userId=${encodeURIComponent(userId)}`, { signal }).then(handleResponse),
-  addToCart: (data, signal) =>
+  create: (data, signal) =>
     fetch(ORDER_API_BASE, {
       method: "POST",
       signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     }).then(handleResponse),
-  checkout: (orderId, data, signal) =>
+  update: (orderId, data, signal) =>
     fetch(`${ORDER_API_BASE}/${orderId}`, {
-      method: "PATCH",
+      method: "PUT",
       signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, action: "checkout" }),
+      body: JSON.stringify(data),
     }).then(handleResponse),
-  cancel: (orderId, signal) =>
+  delete: (orderId, signal) =>
     fetch(`${ORDER_API_BASE}/${orderId}`, {
-      method: "PATCH",
+      method: "DELETE",
       signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel" }),
     }).then(handleResponse),
 };
 

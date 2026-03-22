@@ -496,7 +496,7 @@ export default function CartPage() {
 
       for (const item of selectedItems) {
         const addData = await withTimeout((signal) =>
-          orderApi.addToCart(
+          orderApi.create(
             {
               userId: TEST_USER_ID,
               productId: item.id,
@@ -518,9 +518,10 @@ export default function CartPage() {
       }
 
       const checkoutData = await withTimeout((signal) =>
-        orderApi.checkout(
+        orderApi.update(
           pendingOrderId,
           {
+            action: "checkout",
             shippingAddress: formattedShippingAddress,
           },
           signal
