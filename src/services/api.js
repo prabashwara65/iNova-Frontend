@@ -48,25 +48,27 @@ export const orderApi = {
   getById: (orderId, signal) =>
     fetch(`${ORDER_API_BASE}/${orderId}`, { signal }).then(handleResponse),
   getByUserId: (userId, signal) =>
-    fetch(`${ORDER_API_BASE}/user/${userId}`, { signal }).then(handleResponse),
+    fetch(`${ORDER_API_BASE}?userId=${encodeURIComponent(userId)}`, { signal }).then(handleResponse),
   addToCart: (data, signal) =>
-    fetch(`${ORDER_API_BASE}/add`, {
+    fetch(ORDER_API_BASE, {
       method: "POST",
       signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     }).then(handleResponse),
-  checkout: (data, signal) =>
-    fetch(`${ORDER_API_BASE}/checkout`, {
-      method: "POST",
-      signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }).then(handleResponse),
-  cancel: (orderId, signal) =>
-    fetch(`${ORDER_API_BASE}/${orderId}/cancel`, {
+  checkout: (orderId, data, signal) =>
+    fetch(`${ORDER_API_BASE}/${orderId}`, {
       method: "PATCH",
       signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, action: "checkout" }),
+    }).then(handleResponse),
+  cancel: (orderId, signal) =>
+    fetch(`${ORDER_API_BASE}/${orderId}`, {
+      method: "PATCH",
+      signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel" }),
     }).then(handleResponse),
 };
 
