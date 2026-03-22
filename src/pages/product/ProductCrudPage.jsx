@@ -2,43 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
 
-const STORAGE_KEY = "inova-products";
+const API_BASE_URL =
+  import.meta.env.VITE_PRODUCTS_API_URL ||
+  "http://inova-alb-1159271538.eu-north-1.elb.amazonaws.com/api/products";
 
-const starterProducts = [
-  {
-    id: "iphone-15-pro-max",
-    name: "iPhone 15 Pro Max",
-    category: "Phones",
-    price: "1299",
-    stock: "18",
-    image:
-      "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=1200&q=80",
-    status: "Active",
-    description: "Titanium flagship with advanced camera system and all-day battery life.",
-  },
-  {
-    id: "macbook-air-m3",
-    name: "MacBook Air M3",
-    category: "Laptops",
-    price: "1499",
-    stock: "9",
-    image:
-      "https://images.unsplash.com/photo-1517336714739-489689fd1ca8?auto=format&fit=crop&w=1200&q=80",
-    status: "Active",
-    description: "Thin and light notebook designed for work, study, and creative tasks.",
-  },
-  {
-    id: "airpods-pro-2",
-    name: "AirPods Pro 2",
-    category: "Audio",
-    price: "249",
-    stock: "24",
-    image:
-      "https://images.unsplash.com/photo-1606741965429-0cf8f5d4f6c0?auto=format&fit=crop&w=1200&q=80",
-    status: "Draft",
-    description: "Wireless earbuds with immersive sound and adaptive noise cancellation.",
-  },
-];
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80";
 
 const emptyForm = {
   name: "",
@@ -46,12 +15,22 @@ const emptyForm = {
   price: "",
   stock: "",
   image: "",
-  status: "Active",
+  status: "active",
   description: "",
 };
 
 const categoryOptions = ["Phones", "Laptops", "Audio", "Tablets", "Accessories"];
-const statusOptions = ["Active", "Draft", "Archived"];
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "out_of_stock", label: "Out of Stock" },
+];
+
+const statusLabelMap = {
+  active: "Active",
+  inactive: "Inactive",
+  out_of_stock: "Out of Stock",
+};
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -60,30 +39,16 @@ const formatCurrency = (value) =>
     minimumFractionDigits: 0,
   }).format(Number(value || 0));
 
-const createProductId = (name) =>
-  `${name || "product"}-${Date.now()}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-const loadProducts = () => {
-  if (typeof window === "undefined") {
-    return starterProducts;
-  }
-
-  const savedProducts = window.localStorage.getItem(STORAGE_KEY);
-
-  if (!savedProducts) {
-    return starterProducts;
-  }
-
-  try {
-    const parsedProducts = JSON.parse(savedProducts);
-    return Array.isArray(parsedProducts) && parsedProducts.length > 0 ? parsedProducts : starterProducts;
-  } catch {
-    return starterProducts;
-  }
-};
+const normalizeProduct = (product) => ({
+  id: product._id,
+  name: product.productName || "",
+  category: product.category || "Accessories",
+  price: String(product.price ?? ""),
+  stock: String(product.stock ?? ""),
+  image: product.imageUrl || FALLBACK_IMAGE,
+  status: product.status || "inactive",
+  description: product.description || "",
+});
 
 const Shell = styled.div`
   min-height: 100vh;
@@ -227,6 +192,16 @@ const PanelText = styled.p`
   line-height: 1.75;
 `;
 
+const Banner = styled.div`
+  margin-top: 16px;
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: ${({ $error }) => ($error ? "#fff1f1" : "#eef8f1")};
+  color: ${({ $error }) => ($error ? "#b42318" : "#166534")};
+  border: 1px solid ${({ $error }) => ($error ? "rgba(180, 35, 24, 0.16)" : "rgba(22, 101, 52, 0.16)")};
+  line-height: 1.6;
+`;
+
 const Form = styled.form`
   margin-top: 24px;
   display: grid;
@@ -298,6 +273,7 @@ const PrimaryButton = styled.button`
   padding: 13px 20px;
   cursor: pointer;
   font-weight: 700;
+  opacity: ${({ disabled }) => (disabled ? 0.7 : 1)};
 `;
 
 const SecondaryButton = styled.button`
@@ -383,9 +359,17 @@ const StatusPill = styled.span`
   padding: 8px 12px;
   border-radius: 999px;
   background: ${({ $status }) =>
-    $status === "Active" ? "rgba(31, 122, 66, 0.12)" : $status === "Archived" ? "rgba(17, 17, 17, 0.08)" : "rgba(181, 122, 0, 0.12)"};
+    $status === "active"
+      ? "rgba(31, 122, 66, 0.12)"
+      : $status === "out_of_stock"
+        ? "rgba(181, 122, 0, 0.12)"
+        : "rgba(17, 17, 17, 0.08)"};
   color: ${({ $status, theme }) =>
-    $status === "Active" ? theme.colors.success : $status === "Archived" ? theme.colors.textMuted : "#9a6500"};
+    $status === "active"
+      ? theme.colors.success
+      : $status === "out_of_stock"
+        ? "#9a6500"
+        : theme.colors.textMuted};
   font-size: 0.84rem;
   font-weight: 700;
 `;
@@ -415,6 +399,7 @@ const MetricValue = styled.div`
   margin-top: 8px;
   font-weight: 700;
   font-size: 1rem;
+  word-break: break-word;
 `;
 
 const CardActions = styled.div`
@@ -431,6 +416,7 @@ const ActionButton = styled.button`
   padding: 10px 14px;
   cursor: pointer;
   font-weight: 600;
+  opacity: ${({ disabled }) => (disabled ? 0.7 : 1)};
 `;
 
 const EmptyState = styled.div`
@@ -442,29 +428,74 @@ const EmptyState = styled.div`
   line-height: 1.75;
 `;
 
+const buildPayload = (values) => ({
+  productName: values.name.trim(),
+  category: values.category,
+  status: values.status,
+  price: Number(values.price),
+  stock: Number(values.stock),
+  imageUrl: values.image.trim() || FALLBACK_IMAGE,
+  description: values.description.trim(),
+});
+
+async function readErrorMessage(response) {
+  try {
+    const data = await response.json();
+    return data.error || data.message || "Something went wrong.";
+  } catch {
+    return "Something went wrong.";
+  }
+}
+
 export default function ProductCrudPage() {
-  const [products, setProducts] = useState(loadProducts);
+  const [products, setProducts] = useState([]);
   const [formValues, setFormValues] = useState(emptyForm);
   const [editingId, setEditingId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState({ type: "", message: "" });
+
+  const loadProducts = async () => {
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(API_BASE_URL);
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const data = await response.json();
+      setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error.message || "Unable to load products from the API.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-  }, [products]);
+    loadProducts();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      const searchValue = `${product.name} ${product.category} ${product.description}`.toLowerCase();
+      const searchValue =
+        `${product.name} ${product.category} ${product.description}`.toLowerCase();
       const matchesSearch = searchValue.includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === "All" ? true : product.status === statusFilter;
+      const matchesStatus = statusFilter === "all" ? true : product.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [products, searchTerm, statusFilter]);
 
   const dashboard = useMemo(() => {
     const totalProducts = products.length;
-    const activeProducts = products.filter((product) => product.status === "Active").length;
+    const activeProducts = products.filter((product) => product.status === "active").length;
     const inventoryUnits = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
     const inventoryValue = products.reduce(
       (sum, product) => sum + Number(product.stock || 0) * Number(product.price || 0),
@@ -484,32 +515,54 @@ export default function ProductCrudPage() {
     setFormValues((current) => ({ ...current, [name]: value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setIsSubmitting(true);
+    setFeedback({ type: "", message: "" });
 
-    const nextProduct = {
-      ...formValues,
-      id: editingId || createProductId(formValues.name),
-      price: String(formValues.price).trim(),
-      stock: String(formValues.stock).trim(),
-      image:
-        formValues.image.trim() ||
-        "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80",
-      description: formValues.description.trim(),
-      name: formValues.name.trim(),
-    };
+    const payload = buildPayload(formValues);
+    const requestUrl = editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL;
+    const requestMethod = editingId ? "PUT" : "POST";
 
-    if (editingId) {
-      setProducts((current) => current.map((product) => (product.id === editingId ? nextProduct : product)));
-    } else {
-      setProducts((current) => [nextProduct, ...current]);
+    try {
+      const response = await fetch(requestUrl, {
+        method: requestMethod,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const savedProduct = normalizeProduct(await response.json());
+
+      setProducts((current) =>
+        editingId
+          ? current.map((product) => (product.id === editingId ? savedProduct : product))
+          : [savedProduct, ...current],
+      );
+
+      setFeedback({
+        type: "success",
+        message: editingId ? "Product updated successfully." : "Product created successfully.",
+      });
+      resetForm();
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error.message || "Unable to save the product.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    resetForm();
   };
 
   const handleEdit = (product) => {
     setEditingId(product.id);
+    setFeedback({ type: "", message: "" });
     setFormValues({
       name: product.name,
       category: product.category,
@@ -521,25 +574,66 @@ export default function ProductCrudPage() {
     });
   };
 
-  const handleDelete = (id) => {
-    setProducts((current) => current.filter((product) => product.id !== id));
+  const handleDelete = async (id) => {
+    setFeedback({ type: "", message: "" });
 
-    if (editingId === id) {
-      resetForm();
+    try {
+      const response = await fetch(`${API_BASE_URL}/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      setProducts((current) => current.filter((product) => product.id !== id));
+      setFeedback({ type: "success", message: "Product deleted successfully." });
+
+      if (editingId === id) {
+        resetForm();
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error.message || "Unable to delete the product.",
+      });
     }
   };
 
-  const toggleStatus = (id) => {
-    setProducts((current) =>
-      current.map((product) =>
-        product.id === id
-          ? {
-              ...product,
-              status: product.status === "Active" ? "Archived" : "Active",
-            }
-          : product,
-      ),
-    );
+  const toggleStatus = async (product) => {
+    const nextStatus = product.status === "active" ? "inactive" : "active";
+    setFeedback({ type: "", message: "" });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...buildPayload(product),
+          status: nextStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const updatedProduct = normalizeProduct(await response.json());
+      setProducts((current) =>
+        current.map((item) => (item.id === product.id ? updatedProduct : item)),
+      );
+
+      if (editingId === product.id) {
+        setFormValues((current) => ({ ...current, status: updatedProduct.status }));
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error.message || "Unable to update the product status.",
+      });
+    }
   };
 
   return (
@@ -553,8 +647,8 @@ export default function ProductCrudPage() {
               <Eyebrow>Product CRUD workspace</Eyebrow>
               <Title>Manage your catalog with one clean admin-style UI.</Title>
               <Description>
-                Create, update, search, and remove products from a single screen. This frontend
-                view keeps products in local storage, so your work stays in place after refresh.
+                Create, update, search, and remove products from a single screen. This view is now
+                connected to your product API, so data stays synced across refreshes and devices.
               </Description>
 
               <HeroStats>
@@ -583,8 +677,8 @@ export default function ProductCrudPage() {
                 storefront publishing or internal review.
               </SpotlightText>
               <SpotlightText>
-                Editing an item fills the form automatically, while delete removes it from the
-                catalog immediately.
+                Editing an item fills the form automatically, while delete removes it from the API
+                immediately.
               </SpotlightText>
             </Spotlight>
           </HeroCard>
@@ -599,6 +693,8 @@ export default function ProductCrudPage() {
               Fill in the product information below. The same form handles both product creation
               and updates.
             </PanelText>
+
+            {feedback.message ? <Banner $error={feedback.type === "error"}>{feedback.message}</Banner> : null}
 
             <Form onSubmit={handleSubmit}>
               <FieldGroup>
@@ -629,8 +725,8 @@ export default function ProductCrudPage() {
                   <Label htmlFor="status">Status</Label>
                   <Select id="status" name="status" value={formValues.status} onChange={handleChange}>
                     {statusOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </Select>
@@ -645,6 +741,7 @@ export default function ProductCrudPage() {
                     name="price"
                     type="number"
                     min="0"
+                    step="0.01"
                     value={formValues.price}
                     onChange={handleChange}
                     placeholder="1299"
@@ -691,7 +788,9 @@ export default function ProductCrudPage() {
               </FieldGroup>
 
               <FormActions>
-                <PrimaryButton type="submit">{editingId ? "Save Changes" : "Create Product"}</PrimaryButton>
+                <PrimaryButton type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Saving..." : editingId ? "Save Changes" : "Create Product"}
+                </PrimaryButton>
                 <SecondaryButton type="button" onClick={resetForm}>
                   Clear Form
                 </SecondaryButton>
@@ -714,16 +813,18 @@ export default function ProductCrudPage() {
                 placeholder="Search products"
               />
               <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                <option value="All">All statuses</option>
+                <option value="all">All statuses</option>
                 {statusOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </Select>
             </Toolbar>
 
-            {filteredProducts.length > 0 ? (
+            {isLoading ? (
+              <EmptyState>Loading products from the API...</EmptyState>
+            ) : filteredProducts.length > 0 ? (
               <ProductGrid>
                 {filteredProducts.map((product) => (
                   <ProductCard key={product.id}>
@@ -740,7 +841,9 @@ export default function ProductCrudPage() {
                           </ProductMeta>
                         </div>
 
-                        <StatusPill $status={product.status}>{product.status}</StatusPill>
+                        <StatusPill $status={product.status}>
+                          {statusLabelMap[product.status] || product.status}
+                        </StatusPill>
                       </ProductTop>
 
                       <Metrics>
@@ -759,13 +862,22 @@ export default function ProductCrudPage() {
                       </Metrics>
 
                       <CardActions>
-                        <ActionButton type="button" onClick={() => handleEdit(product)}>
+                        <ActionButton type="button" onClick={() => handleEdit(product)} disabled={isSubmitting}>
                           Edit
                         </ActionButton>
-                        <ActionButton type="button" onClick={() => toggleStatus(product.id)}>
-                          {product.status === "Active" ? "Archive" : "Activate"}
+                        <ActionButton
+                          type="button"
+                          onClick={() => toggleStatus(product)}
+                          disabled={isSubmitting}
+                        >
+                          {product.status === "active" ? "Deactivate" : "Activate"}
                         </ActionButton>
-                        <ActionButton type="button" $danger onClick={() => handleDelete(product.id)}>
+                        <ActionButton
+                          type="button"
+                          $danger
+                          onClick={() => handleDelete(product.id)}
+                          disabled={isSubmitting}
+                        >
                           Delete
                         </ActionButton>
                       </CardActions>
