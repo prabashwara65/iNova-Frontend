@@ -472,7 +472,7 @@ export default function ProductCrudPage() {
 
       setFeedback({
         type: "error",
-        message: `${message} Endpoint: ${API_BASE}/api/products`,
+        message: `${message} Endpoint: ${API_BASE}/api/products/`,
       });
     } finally {
       setIsLoading(false);
