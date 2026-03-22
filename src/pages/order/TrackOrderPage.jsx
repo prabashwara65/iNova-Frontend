@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import TopNav from "../../components/navigation/TopNav";
+import { API_BASE, orderApi } from "../../services/api";
 
-const ORDER_API_BASE_URL =
-  import.meta.env.VITE_ORDER_API_URL || "https://9dzgpp9fuh.execute-api.eu-north-1.amazonaws.com/prod/api/orders/";
 const TEST_USER_ID = import.meta.env.VITE_TEST_USER_ID || "test-user-001";
 const fallbackImage =
   "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=1400&q=80";
+const REQUEST_TIMEOUT_MS = 10000;
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -56,6 +56,17 @@ const getTimelineSteps = (status) => {
     { title: "Delivered", meta: "Final delivery confirmation will appear here.", active: false },
   ];
 };
+
+async function withTimeout(request) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await request(controller.signal);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 const Shell = styled.div`
   min-height: 100vh;
@@ -389,21 +400,24 @@ export default function TrackOrderPage() {
     setLoadingOrders(true);
 
     try {
-      const response = await fetch(`${ORDER_API_BASE_URL}/user/${TEST_USER_ID}`);
-      const data = await response.json();
+      const data = await withTimeout((signal) => orderApi.getByUserId(TEST_USER_ID, signal));
+      const nextOrders = Array.isArray(data) ? data : data.orders || [];
+      setOrders(nextOrders);
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to load orders");
-      }
-
-      setOrders(data.orders || []);
-
-      if (!selectedOrder && data.orders?.length) {
-        setSelectedOrder(data.orders[0]);
-        setSearchOrderId(data.orders[0].orderId);
+      if (!selectedOrder && nextOrders.length) {
+        setSelectedOrder(nextOrders[0]);
+        setSearchOrderId(nextOrders[0].orderId);
       }
     } catch (error) {
-      setFeedback({ tone: "error", message: error.message || "Failed to load order history" });
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Failed to load order history";
+
+      setFeedback({
+        tone: "error",
+        message: `${message} Endpoint: ${API_BASE}/api/orders/user/${TEST_USER_ID}`,
+      });
     } finally {
       setLoadingOrders(false);
     }
@@ -425,19 +439,27 @@ export default function TrackOrderPage() {
     setFeedback({ tone: "info", message: "" });
 
     try {
-      const response = await fetch(`${ORDER_API_BASE_URL}/${searchOrderId.trim()}`);
-      const data = await response.json();
+      const data = await withTimeout((signal) => orderApi.getById(searchOrderId.trim(), signal));
+      const nextOrder = data.order || data;
 
-      if (!response.ok) {
-        throw new Error(data.message || "Order not found");
+      if (!nextOrder?.orderId) {
+        throw new Error("Order response format is invalid");
       }
 
-      setSelectedOrder(data.order);
-      setSearchOrderId(data.order.orderId);
-      setFeedback({ tone: "info", message: `Showing tracking details for ${data.order.orderId}.` });
+      setSelectedOrder(nextOrder);
+      setSearchOrderId(nextOrder.orderId);
+      setFeedback({ tone: "info", message: `Showing tracking details for ${nextOrder.orderId}.` });
     } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Failed to track order";
+
       setSelectedOrder(null);
-      setFeedback({ tone: "error", message: error.message || "Failed to track order" });
+      setFeedback({
+        tone: "error",
+        message: `${message} Endpoint: ${API_BASE}/api/orders/${searchOrderId.trim()}`,
+      });
     } finally {
       setLoadingOrder(false);
     }
@@ -451,22 +473,24 @@ export default function TrackOrderPage() {
     setCanceling(true);
 
     try {
-      const response = await fetch(`${ORDER_API_BASE_URL}/${selectedOrder.orderId}/cancel`, {
-        method: "PATCH",
-      });
-      const data = await response.json();
+      const data = await withTimeout((signal) => orderApi.cancel(selectedOrder.orderId, signal));
+      const nextOrder = data.order || data;
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to cancel order");
-      }
-
-      setSelectedOrder(data.order);
+      setSelectedOrder(nextOrder);
       setOrders((current) =>
-        current.map((order) => (order.orderId === data.order.orderId ? data.order : order))
+        current.map((order) => (order.orderId === nextOrder.orderId ? nextOrder : order))
       );
-      setFeedback({ tone: "info", message: `Order ${data.order.orderId} was cancelled successfully.` });
+      setFeedback({ tone: "info", message: `Order ${nextOrder.orderId} was cancelled successfully.` });
     } catch (error) {
-      setFeedback({ tone: "error", message: error.message || "Failed to cancel order" });
+      const message =
+        error.name === "AbortError"
+          ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
+          : error.message || "Failed to cancel order";
+
+      setFeedback({
+        tone: "error",
+        message: `${message} Endpoint: ${API_BASE}/api/orders/${selectedOrder.orderId}/cancel`,
+      });
     } finally {
       setCanceling(false);
     }
